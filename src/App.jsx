@@ -63,7 +63,7 @@ function Browse({ savedIds, onSave, onOpen, onlySaved = false }) {
 
   return <section><div className="hero"><p className="eyebrow">{onlySaved ? 'YOUR SHORTLIST' : 'LIVE MARKET EXPLORER'}</p>
     <h1>{onlySaved ? 'Saved homes.' : 'Find your next home.'}</h1>
-    <p>{state === 'loading' ? 'Loading market inventory…' : `${items.length.toLocaleString('en-IN')} retrievable records${state === 'updating' ? ' · indexing the rest in the background…' : ''}`}</p></div>
+    <p>{state === 'loading' ? 'Loading market inventory…' : `${items.length.toLocaleString('en-IN')} retrievable records${state === 'updating' ? ' · loading the remaining pages…' : ''}`}</p></div>
     {!onlySaved && <div className="filters filters-enhanced"><input placeholder="Search project or locality" value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} />
       <select value={filters.locality} onChange={(e) => updateFilter('locality', e.target.value)}><option value="">All localities</option>{localities.map((value) => <option key={value}>{value}</option>)}</select>
       <select value={filters.bedroom} onChange={(e) => updateFilter('bedroom', e.target.value)}><option value="">Any bedrooms</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value} BHK</option>)}</select>

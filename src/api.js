@@ -71,25 +71,26 @@ export const getPage = (path, params = {}) => query(path, params);
 
 // Fetch every page by following server-authoritative limit and has_more fields.
 export async function getAll(path) {
-  const results = [];
-  let offset = 0;
-  while (true) {
-    const page = await query(path, { limit: 50, offset });
-    results.push(...page.results);
-    if (!page.has_more) return results;
-    offset += page.limit;
-  }
+  const firstPage = await getPage(path, { limit: 50, offset: 0 });
+  return getAllPages(path, firstPage);
 }
 
-// Starts from an already-rendered page, avoiding a duplicate first request.
+// Starts from an already-rendered page and downloads later pages in small batches.
 export async function getAllPages(path, firstPage) {
   const results = [...firstPage.results];
   let offset = firstPage.offset + firstPage.limit;
-  let page = firstPage;
-  while (page.has_more) {
-    page = await getPage(path, { limit: 50, offset });
-    results.push(...page.results);
-    offset += page.limit;
+  let hasMore = firstPage.has_more;
+  const batchSize = 8;
+  while (hasMore) {
+    // Eight requests stay far below the API limit while cutting long downloads sharply.
+    const offsets = Array.from({ length: batchSize }, (_, index) => offset + index * 50);
+    const pages = await Promise.all(offsets.map((pageOffset) => getPage(path, { limit: 50, offset: pageOffset })));
+    for (const page of pages) {
+      if (page.results?.length) results.push(...page.results);
+    }
+    const lastUsefulPage = pages.find((page) => !page.has_more);
+    hasMore = !lastUsefulPage;
+    offset += batchSize * 50;
   }
   return results;
 }

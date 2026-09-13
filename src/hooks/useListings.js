@@ -29,6 +29,7 @@ export function useListings() {
         if (!active) return;
         setItems(first.results);
         setState('updating');
+        // The first page is already usable; remaining pages download in parallel batches.
         return getAllPages('/v1/listings', first);
       })
       .then((records) => {
