@@ -1,20 +1,15 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-// App owns page-level state while API and formatting rules stay in focused modules.
+import { useEffect, useMemo, useState } from 'react';
+
 import { api, clearSession, getAll, getSession, login } from './api';
 import { ListingCard } from './components/ListingCard';
 import { StatusMessage } from './components/StatusMessage';
 import { useListings } from './hooks/useListings';
-import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { areaSqft, listingPrice, median, money, projectPrice, titleCase } from './lib/format';
-
-// Secondary pages download only when a visitor opens their navigation route.
-const LazyMarket = lazy(() => import('./views/MarketView'));
-const LazyInsights = lazy(() => import('./views/InsightsView'));
 
 // Auth screen used until a valid API session is stored locally.
 function Login({ onAuthenticated }) {
-  const [email, setEmail] = useState('demo1@ivy.homes');
-  const [password, setPassword] = useState('fb9478b74f');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   async function submit(event) {
@@ -26,8 +21,8 @@ function Login({ onAuthenticated }) {
   return <main className="login"><section>
     <p className="eyebrow">IVY / HYDERABAD</p><h1>Property, without the noise.</h1>
     <p>Browse market data, save homes, and see transparent price insights.</p>
-    <form onSubmit={submit}><label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required /></label>
-      <label>Password<input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required /></label>
+    <form onSubmit={submit}><label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="demo1@ivy.homes" autoComplete="off" required /></label>
+      <label>Password<input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" required /></label>
       {error && <StatusMessage type="error">{error}</StatusMessage>}<button>Sign in</button></form>
   </section></main>;
 }
@@ -43,32 +38,27 @@ function Header({ view, changeView, savedCount, signOut }) {
 // Filters run locally after the complete collection is cached for instant feedback.
 function Browse({ savedIds, onSave, onOpen, onlySaved = false }) {
   const { items, state, error } = useListings();
-  const [filters, setFilters] = useState({ locality: '', bedroom: '', furnishing: '', min: '', max: '', search: '', sort: 'newest' });
+  const [filters, setFilters] = useState({ locality: '', bedroom: '', furnishing: '', min: '', max: '' });
   const [page, setPage] = useState(0);
-  const debouncedSearch = useDebouncedValue(filters.search, 250);
-  const debouncedMin = useDebouncedValue(filters.min, 350);
-  const debouncedMax = useDebouncedValue(filters.max, 350);
   const localities = useMemo(() => [...new Set(items.map((item) => item.locality))].sort(), [items]);
   const visible = useMemo(() => items.filter((item) =>
     (!onlySaved || savedIds.has(item.listing_id)) &&
     (!filters.locality || item.locality === filters.locality) &&
     (!filters.bedroom || item.bedroom === Number(filters.bedroom)) &&
     (!filters.furnishing || item.furnishing === filters.furnishing) &&
-    (!debouncedSearch || `${item.apartment_name} ${item.locality}`.toLowerCase().includes(debouncedSearch.toLowerCase())) &&
-    (!debouncedMin || listingPrice(item) >= Number(debouncedMin)) &&
-    (!debouncedMax || listingPrice(item) <= Number(debouncedMax))).sort((a, b) => filters.sort === 'price-low' ? listingPrice(a) - listingPrice(b) : filters.sort === 'price-high' ? listingPrice(b) - listingPrice(a) : new Date(b.posted_at) - new Date(a.posted_at)), [items, filters.locality, filters.bedroom, filters.furnishing, filters.sort, debouncedSearch, debouncedMin, debouncedMax, onlySaved, savedIds]);
+    (!filters.min || listingPrice(item) >= Number(filters.min)) &&
+    (!filters.max || listingPrice(item) <= Number(filters.max))), [items, filters, onlySaved, savedIds]);
   const perPage = 24; const pageCount = Math.max(1, Math.ceil(visible.length / perPage));
   const pageItems = visible.slice(page * perPage, (page + 1) * perPage);
   const updateFilter = (key, value) => { setFilters((previous) => ({ ...previous, [key]: value })); setPage(0); };
 
   return <section><div className="hero"><p className="eyebrow">{onlySaved ? 'YOUR SHORTLIST' : 'LIVE MARKET EXPLORER'}</p>
     <h1>{onlySaved ? 'Saved homes.' : 'Find your next home.'}</h1>
-    <p>{state === 'loading' ? 'Loading market inventory…' : `${items.length.toLocaleString('en-IN')} retrievable records${state === 'updating' ? ' · loading the remaining pages…' : ''}`}</p></div>
-    {!onlySaved && <div className="filters filters-enhanced"><input placeholder="Search project or locality" value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} />
-      <select value={filters.locality} onChange={(e) => updateFilter('locality', e.target.value)}><option value="">All localities</option>{localities.map((value) => <option key={value}>{value}</option>)}</select>
+    <p>{state === 'loading' ? 'Loading market inventory…' : `${items.length.toLocaleString('en-IN')} retrievable records${state === 'updating' ? ' · indexing the rest in the background…' : ''}`}</p></div>
+    {!onlySaved && <div className="filters"><select value={filters.locality} onChange={(e) => updateFilter('locality', e.target.value)}><option value="">All localities</option>{localities.map((value) => <option key={value}>{value}</option>)}</select>
       <select value={filters.bedroom} onChange={(e) => updateFilter('bedroom', e.target.value)}><option value="">Any bedrooms</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value} BHK</option>)}</select>
       <select value={filters.furnishing} onChange={(e) => updateFilter('furnishing', e.target.value)}><option value="">Any furnishing</option>{['unfurnished', 'semi-furnished', 'fully-furnished'].map((value) => <option key={value}>{value}</option>)}</select>
-      <input type="number" placeholder="Minimum price" value={filters.min} onChange={(e) => updateFilter('min', e.target.value)} /><input type="number" placeholder="Maximum price" value={filters.max} onChange={(e) => updateFilter('max', e.target.value)} /><select value={filters.sort} onChange={(e) => updateFilter('sort', e.target.value)}><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></div>}
+      <input type="number" placeholder="Minimum price" value={filters.min} onChange={(e) => updateFilter('min', e.target.value)} /><input type="number" placeholder="Maximum price" value={filters.max} onChange={(e) => updateFilter('max', e.target.value)} /></div>}
     {error ? <StatusMessage type="error">{error}</StatusMessage> : <><p className="result-count">{visible.length} matches · page {page + 1} of {pageCount}. Prices and areas are normalized before filtering.</p>
       <div className="grid">{pageItems.map((item) => <ListingCard key={item.listing_id} listing={item} isSaved={savedIds.has(item.listing_id)} onSave={onSave} onOpen={onOpen} />)}</div>
       {!pageItems.length && state !== 'loading' && <StatusMessage>{onlySaved ? 'No saved listings yet.' : 'No listings match these filters. Try clearing one filter.'}</StatusMessage>}
@@ -128,9 +118,9 @@ export default function App() {
 
   useEffect(() => { const listen = () => setRoute(location.hash.replace('#', '') || 'browse'); addEventListener('hashchange', listen); return () => removeEventListener('hashchange', listen); }, []);
   // The live API uses /v1/saved, not the outdated documented /v1/favourites path.
-  useEffect(() => { if (!session) return; api('/v1/saved').then((data) => setSavedIds(new Set((data.results || []).map((item) => item.listing_id)))).catch(() => {}); }, [session]);
+  useEffect(() => { if (!session) return; api('/v1/saved').then((data) => setSavedIds(new Set((data.results || []).map((item) => item.listing_id)))).catch(() => { }); }, [session]);
   // Update server and UI together so saves remain available after a reload.
   async function toggleSaved(listingId) { try { if (savedIds.has(listingId)) { await api(`/v1/saved/${listingId}`, { method: 'DELETE' }); setSavedIds((old) => { const next = new Set(old); next.delete(listingId); return next; }); } else { await api('/v1/saved', { method: 'POST', body: JSON.stringify({ listing_id: listingId }) }); setSavedIds((old) => new Set(old).add(listingId)); } } catch (e) { setNotice(e.message); } }
   if (!session) return <Login onAuthenticated={() => setCurrentSession(getSession())} />;
-  return <><Header view={view} changeView={changeView} savedCount={savedIds.size} signOut={() => { clearSession(); setCurrentSession(null); }} /><main className="app">{notice && <StatusMessage type="error">{notice}</StatusMessage>}{view === 'browse' && <Browse savedIds={savedIds} onSave={toggleSaved} onOpen={(id) => changeView(`listing/${id}`)} />}{view === 'saved' && <Browse savedIds={savedIds} onSave={toggleSaved} onOpen={(id) => changeView(`listing/${id}`)} onlySaved />}{view === 'detail' && <Detail listingId={route.split('/')[1]} savedIds={savedIds} onSave={toggleSaved} onBack={() => changeView('browse')} />}{view === 'market' && <Suspense fallback={<StatusMessage>Loading rentals and projects…</StatusMessage>}><LazyMarket /></Suspense>}{view === 'insights' && <Suspense fallback={<StatusMessage>Loading market insights…</StatusMessage>}><LazyInsights /></Suspense>}</main></>;
+  return <><Header view={view} changeView={changeView} savedCount={savedIds.size} signOut={() => { clearSession(); setCurrentSession(null); }} /><main className="app">{notice && <StatusMessage type="error">{notice}</StatusMessage>}{view === 'browse' && <Browse savedIds={savedIds} onSave={toggleSaved} onOpen={(id) => changeView(`listing/${id}`)} />}{view === 'saved' && <Browse savedIds={savedIds} onSave={toggleSaved} onOpen={(id) => changeView(`listing/${id}`)} onlySaved />}{view === 'detail' && <Detail listingId={route.split('/')[1]} savedIds={savedIds} onSave={toggleSaved} onBack={() => changeView('browse')} />}{view === 'market' && <Market />}{view === 'insights' && <Insights />}</main></>;
 }
