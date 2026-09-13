@@ -1,0 +1,7 @@
+# Local configuration, generated output, and private analysis files stay off GitHub.
+node_modules/
+dist/
+.vercel/
+.env
+data/
+WORK_EXPLANATION.txt
